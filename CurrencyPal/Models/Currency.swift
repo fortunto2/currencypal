@@ -3,9 +3,51 @@ import SwiftData
 
 /// All supported currencies with display metadata
 enum CurrencyCode: String, Codable, CaseIterable, Identifiable {
-    case USD, EUR, GBP, JPY, CHF, CAD, AUD, CNY, RUB, TRY
+    // Fiat — Frankfurter (ECB) supported
+    case USD, EUR, GBP, JPY, CHF, CAD, AUD, CNY, TRY
+    case BRL, CZK, DKK, HKD, HUF, IDR, ILS, INR, ISK
+    case KRW, MXN, MYR, NOK, NZD, PHP, PLN, RON, SEK, SGD, THB, ZAR
+    // Fiat — supplementary (not in ECB, fetched from open.er-api.com)
+    case RUB
+    // Crypto — CoinGecko
+    case BTC, ETH, SOL, XRP, BNB
 
     var id: String { rawValue }
+
+    var isCrypto: Bool {
+        switch self {
+        case .BTC, .ETH, .SOL, .XRP, .BNB: true
+        default: false
+        }
+    }
+
+    /// Currencies not in Frankfurter/ECB, fetched from alternative API
+    var isSupplementaryFiat: Bool {
+        switch self {
+        case .RUB: true
+        default: false
+        }
+    }
+
+    /// CoinGecko API id for crypto currencies
+    var coinGeckoId: String? {
+        switch self {
+        case .BTC: "bitcoin"
+        case .ETH: "ethereum"
+        case .SOL: "solana"
+        case .XRP: "ripple"
+        case .BNB: "binancecoin"
+        default: nil
+        }
+    }
+
+    static var fiatCases: [CurrencyCode] {
+        allCases.filter { !$0.isCrypto }
+    }
+
+    static var cryptoCases: [CurrencyCode] {
+        allCases.filter { $0.isCrypto }
+    }
 
     var name: String {
         switch self {
@@ -17,8 +59,34 @@ enum CurrencyCode: String, Codable, CaseIterable, Identifiable {
         case .CAD: "Canadian Dollar"
         case .AUD: "Australian Dollar"
         case .CNY: "Chinese Yuan"
-        case .RUB: "Russian Ruble"
         case .TRY: "Turkish Lira"
+        case .BRL: "Brazilian Real"
+        case .CZK: "Czech Koruna"
+        case .DKK: "Danish Krone"
+        case .HKD: "Hong Kong Dollar"
+        case .HUF: "Hungarian Forint"
+        case .IDR: "Indonesian Rupiah"
+        case .ILS: "Israeli Shekel"
+        case .INR: "Indian Rupee"
+        case .ISK: "Icelandic Krona"
+        case .KRW: "South Korean Won"
+        case .MXN: "Mexican Peso"
+        case .MYR: "Malaysian Ringgit"
+        case .NOK: "Norwegian Krone"
+        case .NZD: "New Zealand Dollar"
+        case .PHP: "Philippine Peso"
+        case .PLN: "Polish Zloty"
+        case .RON: "Romanian Leu"
+        case .SEK: "Swedish Krona"
+        case .SGD: "Singapore Dollar"
+        case .THB: "Thai Baht"
+        case .ZAR: "South African Rand"
+        case .RUB: "Russian Ruble"
+        case .BTC: "Bitcoin"
+        case .ETH: "Ethereum"
+        case .SOL: "Solana"
+        case .XRP: "XRP"
+        case .BNB: "BNB"
         }
     }
 
@@ -32,8 +100,34 @@ enum CurrencyCode: String, Codable, CaseIterable, Identifiable {
         case .CAD: "C$"
         case .AUD: "A$"
         case .CNY: "¥"
-        case .RUB: "₽"
         case .TRY: "₺"
+        case .BRL: "R$"
+        case .CZK: "Kc"
+        case .DKK: "kr"
+        case .HKD: "HK$"
+        case .HUF: "Ft"
+        case .IDR: "Rp"
+        case .ILS: "₪"
+        case .INR: "₹"
+        case .ISK: "kr"
+        case .KRW: "₩"
+        case .MXN: "MX$"
+        case .MYR: "RM"
+        case .NOK: "kr"
+        case .NZD: "NZ$"
+        case .PHP: "₱"
+        case .PLN: "zl"
+        case .RON: "lei"
+        case .SEK: "kr"
+        case .SGD: "S$"
+        case .THB: "฿"
+        case .ZAR: "R"
+        case .RUB: "₽"
+        case .BTC: "₿"
+        case .ETH: "Ξ"
+        case .SOL: "SOL"
+        case .XRP: "XRP"
+        case .BNB: "BNB"
         }
     }
 
@@ -47,8 +141,34 @@ enum CurrencyCode: String, Codable, CaseIterable, Identifiable {
         case .CAD: "🇨🇦"
         case .AUD: "🇦🇺"
         case .CNY: "🇨🇳"
-        case .RUB: "🇷🇺"
         case .TRY: "🇹🇷"
+        case .BRL: "🇧🇷"
+        case .CZK: "🇨🇿"
+        case .DKK: "🇩🇰"
+        case .HKD: "🇭🇰"
+        case .HUF: "🇭🇺"
+        case .IDR: "🇮🇩"
+        case .ILS: "🇮🇱"
+        case .INR: "🇮🇳"
+        case .ISK: "🇮🇸"
+        case .KRW: "🇰🇷"
+        case .MXN: "🇲🇽"
+        case .MYR: "🇲🇾"
+        case .NOK: "🇳🇴"
+        case .NZD: "🇳🇿"
+        case .PHP: "🇵🇭"
+        case .PLN: "🇵🇱"
+        case .RON: "🇷🇴"
+        case .SEK: "🇸🇪"
+        case .SGD: "🇸🇬"
+        case .THB: "🇹🇭"
+        case .ZAR: "🇿🇦"
+        case .RUB: "🇷🇺"
+        case .BTC: "₿"
+        case .ETH: "⟠"
+        case .SOL: "◎"
+        case .XRP: "✕"
+        case .BNB: "⬡"
         }
     }
 }

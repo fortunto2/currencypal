@@ -49,7 +49,7 @@ struct ConverterTests {
         #expect(CurrencyCode.USD.symbol == "$")
         #expect(CurrencyCode.EUR.flag == "🇪🇺")
         #expect(CurrencyCode.JPY.name == "Japanese Yen")
-        #expect(CurrencyCode.allCases.count == 10)
+        #expect(CurrencyCode.allCases.count == 36)
     }
 }
 
@@ -145,7 +145,7 @@ struct MultiConverterTests {
         #expect(!available.contains(.JPY))
         #expect(available.contains(.CHF))
         #expect(available.contains(.CAD))
-        #expect(available.count == 6)
+        #expect(available.count == 32)
     }
 }
 

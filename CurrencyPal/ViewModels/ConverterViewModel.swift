@@ -15,7 +15,7 @@ final class ConverterViewModel {
 
     private let service = ExchangeRateService()
 
-    private static let defaultTargets: [CurrencyCode] = [.EUR, .GBP, .JPY]
+    private static let defaultTargets: [CurrencyCode] = [.EUR, .GBP, .JPY, .RUB, .BTC]
 
     /// Load selected currencies from SwiftData, seeding defaults if empty
     @MainActor
