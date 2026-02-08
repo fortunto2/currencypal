@@ -22,6 +22,8 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.currencypal.app
         SWIFT_STRICT_CONCURRENCY: complete
+        DEVELOPMENT_TEAM: 8N495BBBLM
+        CODE_SIGN_STYLE: Automatic
 
   CurrencyPalTests:
     type: bundle.unit-test
