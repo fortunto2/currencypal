@@ -9,5 +9,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [ExchangeRate.self, FavoritePair.self], inMemory: true)
+        .modelContainer(for: [ExchangeRate.self, SelectedCurrency.self, HistoricalRate.self], inMemory: true)
 }

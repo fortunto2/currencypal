@@ -73,16 +73,30 @@ final class ExchangeRate {
     }
 }
 
-/// User's favorite currency pair
+/// User-selected target currency for multi-converter list
 @Model
-final class FavoritePair {
-    var fromCurrency: String
-    var toCurrency: String
+final class SelectedCurrency {
+    var currencyCode: String
     var sortOrder: Int
 
-    init(fromCurrency: String, toCurrency: String, sortOrder: Int = 0) {
-        self.fromCurrency = fromCurrency
-        self.toCurrency = toCurrency
+    init(currencyCode: String, sortOrder: Int) {
+        self.currencyCode = currencyCode
         self.sortOrder = sortOrder
+    }
+}
+
+/// Cached historical rate for chart display
+@Model
+final class HistoricalRate {
+    var baseCurrency: String
+    var targetCurrency: String
+    var rate: Double
+    var date: Date
+
+    init(baseCurrency: String, targetCurrency: String, rate: Double, date: Date) {
+        self.baseCurrency = baseCurrency
+        self.targetCurrency = targetCurrency
+        self.rate = rate
+        self.date = date
     }
 }

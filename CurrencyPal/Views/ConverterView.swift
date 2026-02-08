@@ -1,59 +1,59 @@
 import SwiftUI
 import SwiftData
 
-/// Main converter screen
+/// Main converter screen with multi-currency list
 struct ConverterView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ConverterViewModel()
+    @State private var showAddSheet = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                // From currency
+            VStack(spacing: 0) {
+                // Base currency + amount header
                 CurrencyInputCard(
-                    title: "From",
+                    title: "Base Currency",
                     amount: $viewModel.amount,
                     currency: $viewModel.fromCurrency,
                     isEditable: true
                 )
+                .padding()
                 .onChange(of: viewModel.amount) {
-                    viewModel.convert(context: modelContext)
+                    viewModel.convertAll(context: modelContext)
                 }
                 .onChange(of: viewModel.fromCurrency) {
                     Task { await viewModel.refreshIfNeeded(context: modelContext) }
                 }
 
-                // Swap button
-                Button {
-                    viewModel.swapCurrencies(context: modelContext)
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down.circle.fill")
-                        .font(.title)
-                        .foregroundStyle(.accent)
-                }
-
-                // To currency
-                CurrencyResultCard(
-                    result: viewModel.convertedAmount,
-                    currency: $viewModel.toCurrency
-                )
-                .onChange(of: viewModel.toCurrency) {
-                    viewModel.convert(context: modelContext)
-                }
-
-                // Rate info
-                if !viewModel.rateInfo.isEmpty {
-                    Text(viewModel.rateInfo)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
                 // Freshness indicator
                 if let updated = viewModel.lastUpdated {
                     FreshnessBadge(date: updated)
+                        .padding(.bottom, 8)
                 }
 
-                Spacer()
+                // Target currencies list
+                List {
+                    ForEach(viewModel.selectedTargets) { target in
+                        NavigationLink {
+                            ChartDetailView(base: viewModel.fromCurrency, target: target)
+                        } label: {
+                            ConvertedCurrencyRow(
+                                currency: target,
+                                convertedAmount: viewModel.convertedAmounts[target] ?? "—"
+                            )
+                        }
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            let code = viewModel.selectedTargets[index]
+                            viewModel.removeCurrency(code, context: modelContext)
+                        }
+                    }
+                    .onMove { source, destination in
+                        viewModel.moveCurrency(from: source, to: destination, context: modelContext)
+                    }
+                }
+                .listStyle(.plain)
 
                 // Error
                 if let error = viewModel.errorMessage {
@@ -61,12 +61,22 @@ struct ConverterView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                         .padding(.horizontal)
+                        .padding(.bottom, 8)
                 }
             }
-            .padding()
             .navigationTitle("CurrencyPal")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        showAddSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .disabled(viewModel.availableCurrencies.isEmpty)
+
                     Button {
                         Task { await viewModel.refreshRates(context: modelContext) }
                     } label: {
@@ -78,7 +88,15 @@ struct ConverterView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showAddSheet) {
+                AddCurrencySheet(
+                    availableCurrencies: viewModel.availableCurrencies
+                ) { code in
+                    viewModel.addCurrency(code, context: modelContext)
+                }
+            }
             .task {
+                viewModel.loadSelectedCurrencies(context: modelContext)
                 await viewModel.refreshIfNeeded(context: modelContext)
             }
         }
@@ -87,5 +105,5 @@ struct ConverterView: View {
 
 #Preview {
     ConverterView()
-        .modelContainer(for: [ExchangeRate.self, FavoritePair.self], inMemory: true)
+        .modelContainer(for: [ExchangeRate.self, SelectedCurrency.self, HistoricalRate.self], inMemory: true)
 }

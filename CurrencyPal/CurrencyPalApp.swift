@@ -7,6 +7,6 @@ struct CurrencyPalApp: App {
         WindowGroup {
             ConverterView()
         }
-        .modelContainer(for: [ExchangeRate.self, FavoritePair.self])
+        .modelContainer(for: [ExchangeRate.self, SelectedCurrency.self, HistoricalRate.self])
     }
 }
