@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Main converter screen with multi-currency list
+/// Main converter screen — flat list, tap any row to type, all others recalculate
 struct ConverterView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ConverterViewModel()
@@ -10,42 +10,36 @@ struct ConverterView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Base currency + amount header
-                CurrencyInputCard(
-                    title: "Base Currency",
-                    amount: $viewModel.amount,
-                    currency: $viewModel.fromCurrency,
-                    isEditable: true
-                )
-                .padding()
-                .onChange(of: viewModel.amount) {
-                    viewModel.convertAll(context: modelContext)
-                }
-                .onChange(of: viewModel.fromCurrency) {
-                    Task { await viewModel.refreshIfNeeded(context: modelContext) }
-                }
-
                 // Freshness indicator
                 if let updated = viewModel.lastUpdated {
                     FreshnessBadge(date: updated)
-                        .padding(.bottom, 8)
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
                 }
 
-                // Target currencies list
+                // Currency list — every row is editable
                 List {
-                    ForEach(viewModel.selectedTargets) { target in
+                    ForEach(viewModel.currencies) { currency in
                         NavigationLink {
-                            ChartDetailView(base: viewModel.fromCurrency, target: target)
+                            ChartDetailView(base: viewModel.activeCurrency, target: currency)
                         } label: {
                             ConvertedCurrencyRow(
-                                currency: target,
-                                convertedAmount: viewModel.convertedAmounts[target] ?? "—"
+                                currency: currency,
+                                amount: amountBinding(for: currency),
+                                isActive: viewModel.activeCurrency == currency,
+                                onEdit: { newValue in
+                                    viewModel.userDidEditAmount(
+                                        for: currency,
+                                        newValue: newValue,
+                                        context: modelContext
+                                    )
+                                }
                             )
                         }
                     }
                     .onDelete { indexSet in
                         for index in indexSet {
-                            let code = viewModel.selectedTargets[index]
+                            let code = viewModel.currencies[index]
                             viewModel.removeCurrency(code, context: modelContext)
                         }
                     }
@@ -96,10 +90,18 @@ struct ConverterView: View {
                 }
             }
             .task {
-                viewModel.loadSelectedCurrencies(context: modelContext)
+                viewModel.loadCurrencies(context: modelContext)
                 await viewModel.refreshIfNeeded(context: modelContext)
             }
         }
+    }
+
+    /// Two-way binding into viewModel.amounts for a given currency
+    private func amountBinding(for currency: CurrencyCode) -> Binding<String> {
+        Binding(
+            get: { viewModel.amounts[currency] ?? "" },
+            set: { viewModel.amounts[currency] = $0 }
+        )
     }
 }
 

@@ -2,85 +2,74 @@ import Foundation
 import SwiftData
 import Observation
 
-/// Main view model for the multi-currency converter screen
+/// Main view model for the multi-currency converter screen.
+/// Any row can be the active input — tap it, type a number, all others recalculate.
 @Observable
 final class ConverterViewModel {
-    var amount: String = "1"
-    var fromCurrency: CurrencyCode = .USD
-    var selectedTargets: [CurrencyCode] = []
-    var convertedAmounts: [CurrencyCode: String] = [:]
+    /// Which currency the user is currently typing into
+    var activeCurrency: CurrencyCode = .USD
+    /// Raw text amounts for every currency in the list
+    var amounts: [CurrencyCode: String] = [:]
+    var currencies: [CurrencyCode] = []
     var lastUpdated: Date?
     var isLoading = false
     var errorMessage: String?
 
     private let service = ExchangeRateService()
 
-    private static let defaultTargets: [CurrencyCode] = [.EUR, .GBP, .JPY, .RUB, .BTC]
+    private static let defaultCurrencies: [CurrencyCode] = [.USD, .EUR, .GBP, .JPY, .RUB, .BTC]
 
-    /// Load selected currencies from SwiftData, seeding defaults if empty
+    // MARK: - Lifecycle
+
+    /// Load currency list from SwiftData, seeding defaults if empty
     @MainActor
-    func loadSelectedCurrencies(context: ModelContext) {
+    func loadCurrencies(context: ModelContext) {
         let descriptor = FetchDescriptor<SelectedCurrency>(
             sortBy: [SortDescriptor(\.sortOrder)]
         )
         let saved = (try? context.fetch(descriptor)) ?? []
 
         if saved.isEmpty {
-            // Seed defaults
-            for (index, code) in Self.defaultTargets.enumerated() {
+            for (index, code) in Self.defaultCurrencies.enumerated() {
                 let sc = SelectedCurrency(currencyCode: code.rawValue, sortOrder: index)
                 context.insert(sc)
             }
             try? context.save()
-            selectedTargets = Self.defaultTargets
+            currencies = Self.defaultCurrencies
         } else {
-            selectedTargets = saved.compactMap { CurrencyCode(rawValue: $0.currencyCode) }
+            currencies = saved.compactMap { CurrencyCode(rawValue: $0.currencyCode) }
+        }
+
+        // Set initial amount for active currency
+        if amounts[activeCurrency] == nil {
+            amounts[activeCurrency] = "1"
         }
     }
 
-    /// Add a currency to the selected list
+    // MARK: - User Input
+
+    /// Called when the user types a new amount in a row
     @MainActor
-    func addCurrency(_ code: CurrencyCode, context: ModelContext) {
-        guard !selectedTargets.contains(code), code != fromCurrency else { return }
-        selectedTargets.append(code)
-        let sc = SelectedCurrency(currencyCode: code.rawValue, sortOrder: selectedTargets.count - 1)
-        context.insert(sc)
-        try? context.save()
-        convertAll(context: context)
+    func userDidEditAmount(for currency: CurrencyCode, newValue: String, context: ModelContext) {
+        activeCurrency = currency
+        amounts[currency] = newValue
+        recalculate(context: context)
     }
 
-    /// Remove a currency from the selected list
+    /// Recalculate all amounts based on active currency
     @MainActor
-    func removeCurrency(_ code: CurrencyCode, context: ModelContext) {
-        selectedTargets.removeAll { $0 == code }
-        convertedAmounts.removeValue(forKey: code)
-        // Delete from persistence
-        let codeName = code.rawValue
-        try? context.delete(model: SelectedCurrency.self, where: #Predicate<SelectedCurrency> {
-            $0.currencyCode == codeName
-        })
-        // Re-index sort orders
-        reindexSortOrders(context: context)
-    }
-
-    /// Move a currency within the list (drag-to-reorder)
-    @MainActor
-    func moveCurrency(from source: IndexSet, to destination: Int, context: ModelContext) {
-        selectedTargets.move(fromOffsets: source, toOffset: destination)
-        reindexSortOrders(context: context)
-    }
-
-    /// Convert the input amount to all selected target currencies
-    @MainActor
-    func convertAll(context: ModelContext) {
-        guard let inputAmount = Double(amount.replacingOccurrences(of: ",", with: ".")) else {
-            convertedAmounts = [:]
+    func recalculate(context: ModelContext) {
+        let raw = amounts[activeCurrency] ?? "0"
+        guard let inputAmount = Double(raw.replacingOccurrences(of: ",", with: ".")) else {
+            for code in currencies where code != activeCurrency {
+                amounts[code] = ""
+            }
             return
         }
 
-        let from = fromCurrency.rawValue
+        let from = activeCurrency.rawValue
 
-        for target in selectedTargets {
+        for target in currencies where target != activeCurrency {
             let to = target.rawValue
             let predicate = #Predicate<ExchangeRate> {
                 $0.baseCurrency == from && $0.targetCurrency == to
@@ -89,25 +78,63 @@ final class ConverterViewModel {
 
             if let rate = try? context.fetch(descriptor).first {
                 let result = inputAmount * rate.rate
-                convertedAmounts[target] = formatAmount(result, currency: target)
+                amounts[target] = formatRawAmount(result, currency: target)
                 if lastUpdated == nil || rate.fetchedAt < (lastUpdated ?? .distantFuture) {
                     lastUpdated = rate.fetchedAt
                 }
             } else {
-                convertedAmounts[target] = "—"
+                amounts[target] = "—"
             }
         }
     }
 
-    /// Refresh rates from API
+    // MARK: - List Management
+
+    @MainActor
+    func addCurrency(_ code: CurrencyCode, context: ModelContext) {
+        guard !currencies.contains(code) else { return }
+        currencies.append(code)
+        let sc = SelectedCurrency(currencyCode: code.rawValue, sortOrder: currencies.count - 1)
+        context.insert(sc)
+        try? context.save()
+        recalculate(context: context)
+    }
+
+    @MainActor
+    func removeCurrency(_ code: CurrencyCode, context: ModelContext) {
+        guard currencies.count > 2 else { return } // need at least 2
+        currencies.removeAll { $0 == code }
+        amounts.removeValue(forKey: code)
+        let codeName = code.rawValue
+        try? context.delete(model: SelectedCurrency.self, where: #Predicate<SelectedCurrency> {
+            $0.currencyCode == codeName
+        })
+        if activeCurrency == code {
+            activeCurrency = currencies.first ?? .USD
+        }
+        reindexSortOrders(context: context)
+    }
+
+    @MainActor
+    func moveCurrency(from source: IndexSet, to destination: Int, context: ModelContext) {
+        currencies.move(fromOffsets: source, toOffset: destination)
+        reindexSortOrders(context: context)
+    }
+
+    var availableCurrencies: [CurrencyCode] {
+        CurrencyCode.allCases.filter { !currencies.contains($0) }
+    }
+
+    // MARK: - Network
+
     @MainActor
     func refreshRates(context: ModelContext) async {
         isLoading = true
         errorMessage = nil
 
         do {
-            try await service.updateCache(base: fromCurrency, context: context)
-            convertAll(context: context)
+            try await service.updateCache(base: activeCurrency, context: context)
+            recalculate(context: context)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -115,10 +142,9 @@ final class ConverterViewModel {
         isLoading = false
     }
 
-    /// Check if cache is stale and refresh if needed
     @MainActor
     func refreshIfNeeded(context: ModelContext) async {
-        let from = fromCurrency.rawValue
+        let from = activeCurrency.rawValue
         let predicate = #Predicate<ExchangeRate> { $0.baseCurrency == from }
         let descriptor = FetchDescriptor<ExchangeRate>(predicate: predicate)
 
@@ -127,33 +153,34 @@ final class ConverterViewModel {
         if rates.isEmpty || rates.first?.isStale == true {
             await refreshRates(context: context)
         } else {
-            convertAll(context: context)
+            recalculate(context: context)
         }
-    }
-
-    /// Currencies available to add (not already selected and not the base)
-    var availableCurrencies: [CurrencyCode] {
-        CurrencyCode.allCases.filter { $0 != fromCurrency && !selectedTargets.contains($0) }
     }
 
     // MARK: - Private
 
     private func reindexSortOrders(context: ModelContext) {
-        // Delete all and re-insert with correct sort orders
         try? context.delete(model: SelectedCurrency.self)
-        for (index, code) in selectedTargets.enumerated() {
+        for (index, code) in currencies.enumerated() {
             let sc = SelectedCurrency(currencyCode: code.rawValue, sortOrder: index)
             context.insert(sc)
         }
         try? context.save()
     }
 
-    func formatAmount(_ value: Double, currency: CurrencyCode) -> String {
+    /// Format a number for display in the text field (no currency symbol — just digits)
+    func formatRawAmount(_ value: Double, currency: CurrencyCode) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = currency == .JPY ? 0 : 2
-        formatter.minimumFractionDigits = currency == .JPY ? 0 : 2
-        formatter.groupingSeparator = " "
-        return "\(currency.symbol) \(formatter.string(from: NSNumber(value: value)) ?? "—")"
+        formatter.minimumFractionDigits = 0
+        formatter.groupingSeparator = ""
+        formatter.decimalSeparator = "."
+        return formatter.string(from: NSNumber(value: value)) ?? "0"
+    }
+
+    /// Format with currency symbol for display
+    func formatDisplayAmount(_ value: String, currency: CurrencyCode) -> String {
+        "\(currency.symbol) \(value)"
     }
 }
