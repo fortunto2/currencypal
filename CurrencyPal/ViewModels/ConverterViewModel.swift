@@ -2,13 +2,11 @@ import Foundation
 import SwiftData
 import Observation
 
-/// Main view model for the multi-currency converter screen.
-/// Any row can be the active input — tap it, type a number, all others recalculate.
+/// Multi-currency converter. Any row is editable — all others recalculate instantly.
+/// Uses USD as pivot currency for cross-calculation (no re-fetch needed when switching rows).
 @Observable
 final class ConverterViewModel {
-    /// Which currency the user is currently typing into
     var activeCurrency: CurrencyCode = .USD
-    /// Raw text amounts for every currency in the list
     var amounts: [CurrencyCode: String] = [:]
     var currencies: [CurrencyCode] = []
     var lastUpdated: Date?
@@ -21,7 +19,6 @@ final class ConverterViewModel {
 
     // MARK: - Lifecycle
 
-    /// Load currency list from SwiftData, seeding defaults if empty
     @MainActor
     func loadCurrencies(context: ModelContext) {
         let descriptor = FetchDescriptor<SelectedCurrency>(
@@ -31,8 +28,7 @@ final class ConverterViewModel {
 
         if saved.isEmpty {
             for (index, code) in Self.defaultCurrencies.enumerated() {
-                let sc = SelectedCurrency(currencyCode: code.rawValue, sortOrder: index)
-                context.insert(sc)
+                context.insert(SelectedCurrency(currencyCode: code.rawValue, sortOrder: index))
             }
             try? context.save()
             currencies = Self.defaultCurrencies
@@ -40,7 +36,6 @@ final class ConverterViewModel {
             currencies = saved.compactMap { CurrencyCode(rawValue: $0.currencyCode) }
         }
 
-        // Set initial amount for active currency
         if amounts[activeCurrency] == nil {
             amounts[activeCurrency] = "1"
         }
@@ -48,42 +43,83 @@ final class ConverterViewModel {
 
     // MARK: - User Input
 
-    /// Called when the user types a new amount in a row
+    /// User started editing a row — make it active
     @MainActor
-    func userDidEditAmount(for currency: CurrencyCode, newValue: String, context: ModelContext) {
+    func userDidActivate(currency: CurrencyCode, context: ModelContext) {
+        guard activeCurrency != currency else { return }
         activeCurrency = currency
-        amounts[currency] = newValue
+        // Clear the field for fresh input
+        amounts[currency] = ""
+        // Need rates from this currency — cross-calc needs USD rates
+        Task { await refreshIfNeeded(context: context) }
+    }
+
+    /// User typed a value in the active row
+    @MainActor
+    func userDidType(value: String, context: ModelContext) {
+        amounts[activeCurrency] = value
         recalculate(context: context)
     }
 
-    /// Recalculate all amounts based on active currency
+    /// Cross-calculate all amounts using USD as pivot.
+    /// If active is EUR and we have USD→EUR=0.92, USD→JPY=149.85,
+    /// then EUR→JPY = 149.85 / 0.92 = 162.88
     @MainActor
     func recalculate(context: ModelContext) {
         let raw = amounts[activeCurrency] ?? "0"
-        guard let inputAmount = Double(raw.replacingOccurrences(of: ",", with: ".")) else {
+        guard let inputAmount = Double(raw.replacingOccurrences(of: ",", with: ".")),
+              inputAmount > 0 else {
             for code in currencies where code != activeCurrency {
                 amounts[code] = ""
             }
             return
         }
 
-        let from = activeCurrency.rawValue
+        let activeUSDRate = usdRate(for: activeCurrency, context: context)
+        guard activeUSDRate > 0 else {
+            for code in currencies where code != activeCurrency {
+                amounts[code] = "—"
+            }
+            return
+        }
 
         for target in currencies where target != activeCurrency {
-            let to = target.rawValue
-            let predicate = #Predicate<ExchangeRate> {
-                $0.baseCurrency == from && $0.targetCurrency == to
-            }
-            let descriptor = FetchDescriptor<ExchangeRate>(predicate: predicate)
-
-            if let rate = try? context.fetch(descriptor).first {
-                let result = inputAmount * rate.rate
-                amounts[target] = formatRawAmount(result, currency: target)
-                if lastUpdated == nil || rate.fetchedAt < (lastUpdated ?? .distantFuture) {
-                    lastUpdated = rate.fetchedAt
-                }
+            let targetUSDRate = usdRate(for: target, context: context)
+            if targetUSDRate > 0 {
+                // X→Y = (USD→Y) / (USD→X) where USD→X means "1 USD = X units"
+                let rate = targetUSDRate / activeUSDRate
+                let result = inputAmount * rate
+                amounts[target] = formatRaw(result, currency: target)
+                // Track freshness from the rate entry
+                updateFreshness(for: target, context: context)
             } else {
                 amounts[target] = "—"
+            }
+        }
+    }
+
+    /// Get "1 USD = ? target" rate from cache
+    private func usdRate(for currency: CurrencyCode, context: ModelContext) -> Double {
+        if currency == .USD { return 1.0 }
+        let usd = "USD"
+        let target = currency.rawValue
+        let predicate = #Predicate<ExchangeRate> {
+            $0.baseCurrency == usd && $0.targetCurrency == target
+        }
+        let descriptor = FetchDescriptor<ExchangeRate>(predicate: predicate)
+        return (try? context.fetch(descriptor).first?.rate) ?? 0
+    }
+
+    private func updateFreshness(for currency: CurrencyCode, context: ModelContext) {
+        let usd = "USD"
+        let target = currency.rawValue
+        let predicate = #Predicate<ExchangeRate> {
+            $0.baseCurrency == usd && $0.targetCurrency == target
+        }
+        let descriptor = FetchDescriptor<ExchangeRate>(predicate: predicate)
+        if let rate = try? context.fetch(descriptor).first {
+            if lastUpdated == nil || rate.fetchedAt < (lastUpdated ?? .distantFuture) {
+                lastUpdated = rate.fetchedAt
             }
         }
     }
@@ -94,15 +130,14 @@ final class ConverterViewModel {
     func addCurrency(_ code: CurrencyCode, context: ModelContext) {
         guard !currencies.contains(code) else { return }
         currencies.append(code)
-        let sc = SelectedCurrency(currencyCode: code.rawValue, sortOrder: currencies.count - 1)
-        context.insert(sc)
+        context.insert(SelectedCurrency(currencyCode: code.rawValue, sortOrder: currencies.count - 1))
         try? context.save()
         recalculate(context: context)
     }
 
     @MainActor
     func removeCurrency(_ code: CurrencyCode, context: ModelContext) {
-        guard currencies.count > 2 else { return } // need at least 2
+        guard currencies.count > 2 else { return }
         currencies.removeAll { $0 == code }
         amounts.removeValue(forKey: code)
         let codeName = code.rawValue
@@ -127,13 +162,14 @@ final class ConverterViewModel {
 
     // MARK: - Network
 
+    /// Always fetch USD-based rates (our pivot), so cross-calc works for any active currency
     @MainActor
     func refreshRates(context: ModelContext) async {
         isLoading = true
         errorMessage = nil
 
         do {
-            try await service.updateCache(base: activeCurrency, context: context)
+            try await service.updateCache(base: .USD, context: context)
             recalculate(context: context)
         } catch {
             errorMessage = error.localizedDescription
@@ -144,8 +180,8 @@ final class ConverterViewModel {
 
     @MainActor
     func refreshIfNeeded(context: ModelContext) async {
-        let from = activeCurrency.rawValue
-        let predicate = #Predicate<ExchangeRate> { $0.baseCurrency == from }
+        let usd = "USD"
+        let predicate = #Predicate<ExchangeRate> { $0.baseCurrency == usd }
         let descriptor = FetchDescriptor<ExchangeRate>(predicate: predicate)
 
         let rates = (try? context.fetch(descriptor)) ?? []
@@ -162,25 +198,25 @@ final class ConverterViewModel {
     private func reindexSortOrders(context: ModelContext) {
         try? context.delete(model: SelectedCurrency.self)
         for (index, code) in currencies.enumerated() {
-            let sc = SelectedCurrency(currencyCode: code.rawValue, sortOrder: index)
-            context.insert(sc)
+            context.insert(SelectedCurrency(currencyCode: code.rawValue, sortOrder: index))
         }
         try? context.save()
     }
 
-    /// Format a number for display in the text field (no currency symbol — just digits)
-    func formatRawAmount(_ value: Double, currency: CurrencyCode) -> String {
+    func formatRaw(_ value: Double, currency: CurrencyCode) -> String {
+        if currency.isCrypto {
+            // Crypto needs more precision
+            let formatted = String(format: "%.8f", value)
+            // Trim trailing zeros but keep at least one decimal
+            let trimmed = formatted.replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
+            return trimmed.hasSuffix(".") ? trimmed + "0" : trimmed
+        }
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = currency == .JPY ? 0 : 2
+        formatter.maximumFractionDigits = currency == .JPY || currency == .KRW ? 0 : 2
         formatter.minimumFractionDigits = 0
         formatter.groupingSeparator = ""
         formatter.decimalSeparator = "."
         return formatter.string(from: NSNumber(value: value)) ?? "0"
-    }
-
-    /// Format with currency symbol for display
-    func formatDisplayAmount(_ value: String, currency: CurrencyCode) -> String {
-        "\(currency.symbol) \(value)"
     }
 }
