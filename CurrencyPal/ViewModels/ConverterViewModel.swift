@@ -43,15 +43,11 @@ final class ConverterViewModel {
 
     // MARK: - User Input
 
-    /// User started editing a row — make it active
+    /// User tapped a row — make it active, keep value visible (don't clear yet)
     @MainActor
     func userDidActivate(currency: CurrencyCode, context: ModelContext) {
         guard activeCurrency != currency else { return }
         activeCurrency = currency
-        // Clear the field for fresh input
-        amounts[currency] = ""
-        // Need rates from this currency — cross-calc needs USD rates
-        Task { await refreshIfNeeded(context: context) }
     }
 
     /// User typed a value in the active row

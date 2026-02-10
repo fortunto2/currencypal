@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Editable currency row.
-/// - Tap amount field → clears & becomes active input, all others recalculate
-/// - Tap flag/name area → navigates to chart
+/// Editable currency row with "select-all" behavior:
+/// - Tap amount → highlights row, value stays visible
+/// - Start typing → old value replaced with new input (like select-all + type)
+/// - Tap flag/name → navigates to chart
 struct ConvertedCurrencyRow: View {
     let currency: CurrencyCode
     @Binding var amount: String
@@ -12,6 +13,9 @@ struct ConvertedCurrencyRow: View {
     let onChartTap: () -> Void
 
     @FocusState private var isFocused: Bool
+    /// When true, the next additive keystroke replaces the entire value
+    @State private var pendingReplace = false
+    @State private var preEditValue = ""
 
     var body: some View {
         HStack(spacing: 10) {
@@ -49,17 +53,31 @@ struct ConvertedCurrencyRow: View {
                 .padding(.horizontal, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(isFocused ? Color.accentColor.opacity(0.08) : Color(.systemGray6))
+                        .fill(isFocused ? Color.accentColor.opacity(0.1) : Color(.systemGray6))
                 )
                 .focused($isFocused)
                 .onChange(of: isFocused) {
                     if isFocused && !isActive {
-                        // Switching to a new row: clear old value for fresh input
+                        // Tapped a new row — mark for replacement, keep value visible
+                        pendingReplace = true
+                        preEditValue = amount
                         onActivate()
                     }
                 }
                 .onChange(of: amount) {
-                    if isFocused && isActive {
+                    guard isFocused else { return }
+
+                    if pendingReplace {
+                        pendingReplace = false
+                        // First keystroke after focus: replace old value
+                        if amount.count > preEditValue.count {
+                            // User typed a character — keep only the new part
+                            let typed = String(amount.suffix(amount.count - preEditValue.count))
+                            amount = typed
+                        }
+                        // If backspace: amount is shorter, just use as-is
+                        onType(amount)
+                    } else if isActive {
                         onType(amount)
                     }
                 }
