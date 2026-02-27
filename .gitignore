@@ -32,3 +32,4 @@ Pods/
 .env
 .env.local
 .solo/
+.playwright-mcp/
