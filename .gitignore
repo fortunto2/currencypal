@@ -31,3 +31,4 @@ Pods/
 # Environment
 .env
 .env.local
+.solo/
