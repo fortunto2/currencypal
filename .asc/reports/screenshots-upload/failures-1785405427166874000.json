@@ -1,0 +1,28 @@
+{
+  "versionLocalizationId": "2796fa3f-975c-4577-9864-f48fecd91204",
+  "path": ".asc/reports/screenshots-upload/failures-1785405427166874000.json",
+  "deviceType": "IPHONE_67",
+  "displayType": "APP_IPHONE_67",
+  "setId": "d56573e1-0b10-40cd-a48a-ca1799595668",
+  "files": [
+    "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/01-converter.png",
+    "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/02-typing.png",
+    "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/03-chart.png",
+    "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/04-add-currency.png"
+  ],
+  "pendingFiles": [
+    "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/01-converter.png",
+    "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/02-typing.png",
+    "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/03-chart.png",
+    "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/04-add-currency.png"
+  ],
+  "failures": [
+    {
+      "fileName": "01-converter.png",
+      "filePath": "/Users/rustam/startups/active/currencypal/store/screenshots/en-US/01-converter.png",
+      "error": "upload operation 0 failed: Put \"https://northamerica-1.object-storage.apple.com/itmspod12-assets-massilia-200001/PurpleSource221/v4/99/08/20/990820f0-913c-6ef3-3260-05f75cb651e9/AY0GKBsGG08ovkn9N4-s1bIM_tiWNiSCu5LJD_pQfPk_U003d-1785405419372?partNumber=1\u0026uploadId=01866e10-8bfd-11f1-b407-6edfe416578b\u0026apple-asset-repo-correlation-key=MA5UEF2QFEYGADH4JWJSKNS3TU\u0026X-Amz-Algorithm=AWS4-HMAC-SHA256\u0026X-Amz-Date=20260730T095659Z\u0026X-Amz-SignedHeaders=host\u0026X-Amz-Credential=PKIAI0ZGNAD8WKMSOOX0%2F20260730%2Fnorthamerica-1%2Fs3%2Faws4_request\u0026X-Amz-Expires=604800\u0026X-Amz-Signature=7fae2fc9740fb58641b462d64cbb6660fc53a4e3630185192f5d5bd4d39a74ec\": tls: failed to verify certificate: x509: “192.168.1.1” certificate is not trusted"
+    }
+  ],
+  "error": "upload operation 0 failed: Put \"https://northamerica-1.object-storage.apple.com/itmspod12-assets-massilia-200001/PurpleSource221/v4/99/08/20/990820f0-913c-6ef3-3260-05f75cb651e9/AY0GKBsGG08ovkn9N4-s1bIM_tiWNiSCu5LJD_pQfPk_U003d-1785405419372?partNumber=1\u0026uploadId=01866e10-8bfd-11f1-b407-6edfe416578b\u0026apple-asset-repo-correlation-key=MA5UEF2QFEYGADH4JWJSKNS3TU\u0026X-Amz-Algorithm=AWS4-HMAC-SHA256\u0026X-Amz-Date=20260730T095659Z\u0026X-Amz-SignedHeaders=host\u0026X-Amz-Credential=PKIAI0ZGNAD8WKMSOOX0%2F20260730%2Fnorthamerica-1%2Fs3%2Faws4_request\u0026X-Amz-Expires=604800\u0026X-Amz-Signature=7fae2fc9740fb58641b462d64cbb6660fc53a4e3630185192f5d5bd4d39a74ec\": tls: failed to verify certificate: x509: “192.168.1.1” certificate is not trusted",
+  "generatedAt": "2026-07-30T09:57:07Z"
+}
