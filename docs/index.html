@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CurrencyPal — Support</title>
+<meta name="description" content="Support and help for CurrencyPal, a private, offline-first currency converter for iPhone.">
+<style>
+  :root { color-scheme: light dark; --fg: #1c1c1e; --muted: #6b6b70; --bg: #fff; --accent: #0d9488; --line: #e5e5ea; --card: #f7f7f9; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #f2f2f7; --muted: #a1a1a6; --bg: #111113; --accent: #2dd4bf; --line: #2c2c2e; --card: #1c1c1f; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 3rem 1.25rem 5rem; max-width: 44rem;
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--fg); background: var(--bg);
+  }
+  header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+  .icon {
+    width: 72px; height: 72px; flex: none; border-radius: 16px;
+    background: linear-gradient(160deg, #203a8a, #0d9488);
+    display: grid; place-items: center; color: #fff;
+    font-size: 30px; font-weight: 600; letter-spacing: -1px;
+  }
+  h1 { font-size: 1.9rem; letter-spacing: -0.02em; margin: 0; }
+  .tagline { color: var(--muted); margin: .2rem 0 0; }
+  h2 { font-size: 1.15rem; margin: 2.5rem 0 .6rem; letter-spacing: -0.01em; }
+  h3 { font-size: 1rem; margin: 1.5rem 0 .3rem; }
+  a { color: var(--accent); }
+  ul { padding-left: 1.2rem; }
+  li { margin: .35rem 0; }
+  .card { background: var(--card); border-radius: 12px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+  .card p { margin: .4rem 0; }
+  footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="icon">$/€</div>
+  <div>
+    <h1>CurrencyPal</h1>
+    <p class="tagline">A private, offline-first currency converter for iPhone.</p>
+  </div>
+</header>
+
+<p>Type an amount in any row and every other currency updates at once. Rates are cached on your
+device, so the app keeps converting when you have no signal — on a plane, on a border crossing, on
+a foreign SIM that has not connected yet.</p>
+
+<div class="card">
+  <p><strong>Need help or found a bug?</strong></p>
+  <p>Email <a href="mailto:info@superduperai.co">info@superduperai.co</a> — please mention your iOS
+  version and what you were doing. Bug reports are welcome and read by a human.</p>
+</div>
+
+<h2>How it works</h2>
+<ul>
+  <li><strong>Any row is the input.</strong> Tap an amount and type; the row clears and shows the previous value greyed out, so you always know what it was.</li>
+  <li><strong>Reorder or remove.</strong> Tap <em>Edit</em> to drag rows, or swipe a row left to delete it.</li>
+  <li><strong>Add currencies.</strong> Tap <strong>+</strong> and search by code or name. 31 currencies plus Bitcoin, Ethereum, Solana, XRP and BNB.</li>
+  <li><strong>See the trend.</strong> Tap a currency's name to open its 30-day chart with high, low and change.</li>
+  <li><strong>Refresh.</strong> Pull the list down, or tap the refresh button. Rates also refresh automatically when they are more than four hours old.</li>
+</ul>
+
+<h2>Frequently asked</h2>
+
+<h3>The rates look out of date.</h3>
+<p>The badge at the top of the list says when they were last fetched, and turns orange after four
+hours. Pull down to refresh. If a refresh fails, the app keeps the previous rates rather than
+showing you nothing, and marks the badge with a no-signal icon.</p>
+
+<h3>Where do the rates come from?</h3>
+<p>Fiat currencies use European Central Bank reference rates via
+<a href="https://frankfurter.dev">Frankfurter</a>; the ruble uses
+<a href="https://www.exchangerate-api.com">open.er-api.com</a>; crypto prices come from
+<a href="https://www.coingecko.com">CoinGecko</a>. These are reference rates for orientation — a
+bank, card issuer or exchange office will apply its own spread and fees.</p>
+
+<h3>Why does a chart say there is no data?</h3>
+<p>Historical series are not published for every pair — the ruble is the main example. Rate
+providers also throttle free requests; if you open several charts in quick succession, give it a
+moment and reopen.</p>
+
+<h3>Does it work offline?</h3>
+<p>Yes, once it has fetched rates at least once. Conversion runs entirely on your device.</p>
+
+<h3>Do you collect any data?</h3>
+<p>No. No accounts, no analytics, no tracking, no ads. See the
+<a href="privacy.html">privacy policy</a>.</p>
+
+<footer>
+  <p><a href="privacy.html">Privacy Policy</a> · <a href="https://github.com/fortunto2/currencypal">Source code</a></p>
+  <p>© 2026 SuperDuperAI</p>
+</footer>
+
+</body>
+</html>
