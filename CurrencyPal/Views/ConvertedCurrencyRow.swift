@@ -1,20 +1,20 @@
 import SwiftUI
 
-/// Editable currency row with "select-all" behavior:
-/// - Tap amount → highlights row, value stays visible
-/// - Start typing → old value replaced with new input (like select-all + type)
-/// - Tap flag/name → navigates to chart
+/// Editable currency row.
+///
+/// Focusing a row clears its field and keeps the previous amount visible as the
+/// placeholder. That beats trying to emulate select-all: a tap on a right-aligned
+/// number puts the caret wherever it landed, so "type over the old value" would
+/// splice digits into the middle of it ("0.88" + "100" → "1000.88").
+/// Leaving a row untouched restores what was there.
 struct ConvertedCurrencyRow: View {
     let currency: CurrencyCode
     @Binding var amount: String
-    let isActive: Bool
-    let onActivate: () -> Void
-    let onType: (String) -> Void
+    let isFocused: Bool
+    let onType: (CurrencyCode, String) -> Void
     let onChartTap: () -> Void
 
-    @FocusState private var isFocused: Bool
-    /// When true, the next additive keystroke replaces the entire value
-    @State private var pendingReplace = false
+    /// The value shown before editing began — placeholder, and fallback on exit.
     @State private var preEditValue = ""
 
     var body: some View {
@@ -33,55 +33,57 @@ struct ConvertedCurrencyRow: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
+
+                    Image(systemName: "chart.xyaxis.line")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
+                .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(currency.name) chart"))
 
-            Spacer()
+            Spacer(minLength: 4)
 
             // Right: symbol + editable amount
             Text(currency.symbol)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
 
-            TextField("0", text: $amount)
+            TextField(placeholder, text: $amount)
                 .keyboardType(.decimalPad)
                 .font(.title3.monospacedDigit())
                 .multilineTextAlignment(.trailing)
-                .frame(maxWidth: 130)
+                .frame(maxWidth: 150)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(isFocused ? Color.accentColor.opacity(0.1) : Color(.systemGray6))
+                        .fill(isFocused ? Color.accentColor.opacity(0.12) : Color(.systemGray6))
                 )
-                .focused($isFocused)
+                .accessibilityLabel(Text("\(currency.name) amount"))
                 .onChange(of: isFocused) {
-                    if isFocused && !isActive {
-                        // Tapped a new row — mark for replacement, keep value visible
-                        pendingReplace = true
+                    if isFocused {
                         preEditValue = amount
-                        onActivate()
+                        amount = ""
+                    } else if amount.isEmpty && !preEditValue.isEmpty {
+                        // Tapped in, typed nothing, tapped out — put the value back.
+                        amount = preEditValue
+                        onType(currency, preEditValue)
                     }
                 }
-                .onChange(of: amount) {
+                .onChange(of: amount) { _, newValue in
                     guard isFocused else { return }
-
-                    if pendingReplace {
-                        pendingReplace = false
-                        // First keystroke after focus: replace old value
-                        if amount.count > preEditValue.count {
-                            // User typed a character — keep only the new part
-                            let typed = String(amount.suffix(amount.count - preEditValue.count))
-                            amount = typed
-                        }
-                        // If backspace: amount is shorter, just use as-is
-                        onType(amount)
-                    } else if isActive {
-                        onType(amount)
-                    }
+                    let cleaned = ConverterViewModel.sanitize(newValue)
+                    if cleaned != newValue { amount = cleaned }
+                    onType(currency, cleaned)
                 }
         }
         .padding(.vertical, 2)
+    }
+
+    /// While editing, the old amount stays on screen greyed out.
+    private var placeholder: String {
+        isFocused && !preEditValue.isEmpty ? preEditValue : "0"
     }
 }

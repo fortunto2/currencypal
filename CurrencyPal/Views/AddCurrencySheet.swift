@@ -5,10 +5,21 @@ struct AddCurrencySheet: View {
     let availableCurrencies: [CurrencyCode]
     let onSelect: (CurrencyCode) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    /// Match on code or name so both "zł" hunters and "Polish" hunters find PLN.
+    private var results: [CurrencyCode] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return availableCurrencies }
+        return availableCurrencies.filter {
+            $0.rawValue.localizedCaseInsensitiveContains(trimmed)
+                || $0.name.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            List(availableCurrencies) { code in
+            List(results) { code in
                 Button {
                     onSelect(code)
                     dismiss()
@@ -27,8 +38,16 @@ struct AddCurrencySheet: View {
                         Text(code.symbol)
                             .foregroundStyle(.secondary)
                     }
+                    .contentShape(.rect)
                 }
                 .tint(.primary)
+                .accessibilityIdentifier("currency-\(code.rawValue)")
+            }
+            .searchable(text: $query, prompt: "Search currencies")
+            .overlay {
+                if results.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                }
             }
             .navigationTitle("Add Currency")
             .navigationBarTitleDisplayMode(.inline)

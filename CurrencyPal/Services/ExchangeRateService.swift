@@ -1,34 +1,83 @@
 import Foundation
 import SwiftData
 
-/// Fetches exchange rates from Frankfurter API (fiat) and CoinGecko (crypto), caches in SwiftData
+/// Immutable set of USD-based rates fetched from the network.
+/// `rates["EUR"] == 0.92` means "1 USD = 0.92 EUR".
+struct RateSnapshot: Sendable {
+    let rates: [String: Double]
+    let fetchedAt: Date
+}
+
+/// Fetches exchange rates from Frankfurter (fiat), CoinGecko (crypto) and
+/// open.er-api.com (fiat outside the ECB set, e.g. RUB).
+///
+/// Networking only — persistence is the caller's job. That split is deliberate:
+/// the cache must never be cleared before a fetch has actually succeeded,
+/// otherwise a failed refresh leaves the app with nothing to show offline.
 actor ExchangeRateService {
     private let frankfurterBaseURL = URL(string: "https://api.frankfurter.dev/v1/latest")!
     private let timeSeriesBaseURL = "https://api.frankfurter.dev/v1/"
     private let coinGeckoBaseURL = "https://api.coingecko.com/api/v3"
 
+    /// Short timeouts: a converter that hangs for the default 60s reads as broken.
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 20
+        config.waitsForConnectivity = false
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: config)
+    }()
+
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
+
+    // MARK: - Transport
+
+    /// CoinGecko's keyless tier starts returning 429 after a handful of calls, which
+    /// is easy to hit by opening two charts in a row. One backoff retry turns that
+    /// from a dead screen into a short wait.
+    private func get(_ url: URL, retriesOnRateLimit: Int = 1) async throws -> Data {
+        do {
+            let (data, response) = try await session.data(from: url)
+            guard let http = response as? HTTPURLResponse else {
+                throw ExchangeRateError.serverUnavailable
+            }
+
+            if http.statusCode == 429 {
+                guard retriesOnRateLimit > 0 else { throw ExchangeRateError.rateLimited }
+                let retryAfter = (http.value(forHTTPHeaderField: "Retry-After")).flatMap(Double.init) ?? 2
+                try await Task.sleep(for: .seconds(min(retryAfter, 5)))
+                return try await get(url, retriesOnRateLimit: retriesOnRateLimit - 1)
+            }
+
+            guard http.statusCode == 200 else {
+                throw ExchangeRateError.serverUnavailable
+            }
+            return data
+        } catch let error as ExchangeRateError {
+            throw error
+        } catch is CancellationError {
+            throw ExchangeRateError.serverUnavailable
+        } catch {
+            throw ExchangeRateError.from(error)
+        }
+    }
 
     // MARK: - Frankfurter (Fiat)
 
     /// Fetch latest fiat rates from Frankfurter API
     func fetchRates(base: CurrencyCode) async throws -> FrankfurterResponse {
         var components = URLComponents(url: frankfurterBaseURL, resolvingAgainstBaseURL: false)!
-        let baseCode = base.isCrypto ? CurrencyCode.USD : base
+        let baseCode = (base.isCrypto || base.isSupplementaryFiat) ? CurrencyCode.USD : base
         components.queryItems = [URLQueryItem(name: "base", value: baseCode.rawValue)]
 
-        let (data, response) = try await URLSession.shared.data(from: components.url!)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw ExchangeRateError.networkError
-        }
-
+        let data = try await get(components.url!)
         return try JSONDecoder().decode(FrankfurterResponse.self, from: data)
     }
 
@@ -37,25 +86,18 @@ actor ExchangeRateService {
     /// Fetch crypto prices in a given fiat currency from CoinGecko
     func fetchCryptoPrices(vsCurrency: String = "usd") async throws -> [String: Double] {
         let ids = CurrencyCode.cryptoCases.compactMap(\.coinGeckoId).joined(separator: ",")
-        let urlString = "\(coinGeckoBaseURL)/simple/price?ids=\(ids)&vs_currencies=\(vsCurrency.lowercased())"
-
-        guard let url = URL(string: urlString) else {
-            throw ExchangeRateError.networkError
+        let vs = vsCurrency.lowercased()
+        guard let url = URL(string: "\(coinGeckoBaseURL)/simple/price?ids=\(ids)&vs_currencies=\(vs)") else {
+            throw ExchangeRateError.serverUnavailable
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw ExchangeRateError.networkError
-        }
+        let data = try await get(url)
 
         // Response: {"bitcoin":{"usd":97000},"ethereum":{"usd":3200},...}
         let json = try JSONDecoder().decode([String: [String: Double]].self, from: data)
         var prices: [String: Double] = [:]
         for crypto in CurrencyCode.cryptoCases {
-            if let geckoId = crypto.coinGeckoId,
-               let price = json[geckoId]?[vsCurrency.lowercased()] {
+            if let geckoId = crypto.coinGeckoId, let price = json[geckoId]?[vs], price > 0 {
                 prices[crypto.rawValue] = price
             }
         }
@@ -64,304 +106,193 @@ actor ExchangeRateService {
 
     // MARK: - Supplementary Fiat (RUB etc.)
 
-    /// Fetch rates from open.er-api.com for currencies not in ECB (e.g. RUB)
+    /// Fetch rates from open.er-api.com for currencies not covered by the ECB (e.g. RUB)
     func fetchSupplementaryRates(base: String = "USD") async throws -> [String: Double] {
-        let urlString = "https://open.er-api.com/v6/latest/\(base)"
-        guard let url = URL(string: urlString) else {
-            throw ExchangeRateError.networkError
+        guard let url = URL(string: "https://open.er-api.com/v6/latest/\(base)") else {
+            throw ExchangeRateError.serverUnavailable
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw ExchangeRateError.networkError
-        }
+        let data = try await get(url)
 
         // Response: {"result":"success","base_code":"USD","rates":{"RUB":96.5,...}}
-        let json = try JSONDecoder().decode(OpenERResponse.self, from: data)
-        return json.rates
+        return try JSONDecoder().decode(OpenERResponse.self, from: data).rates
     }
 
-    // MARK: - Combined Cache Update
+    // MARK: - Snapshot
 
-    /// Update cached rates: fiat from Frankfurter + crypto from CoinGecko
-    @MainActor
-    func updateCache(base: CurrencyCode, context: ModelContext) async throws {
-        let now = Date()
-        let baseName = base.rawValue
+    /// Fetch every rate the app needs, expressed against USD, in one pass.
+    ///
+    /// The three sources run concurrently. Frankfurter is required — without fiat
+    /// rates there is no usable snapshot. Crypto and supplementary fiat are
+    /// best-effort: a CoinGecko outage should not cost the user EUR and GBP.
+    func fetchUSDSnapshot() async throws -> RateSnapshot {
+        async let fiatTask = fetchRates(base: .USD)
+        async let cryptoTask = fetchCryptoPrices(vsCurrency: "usd")
+        async let supplementaryTask = fetchSupplementaryRates(base: "USD")
 
-        // Delete old rates for this base
-        try context.delete(model: ExchangeRate.self, where: #Predicate<ExchangeRate> {
-            $0.baseCurrency == baseName
-        })
+        let crypto = try? await cryptoTask
+        let supplementary = try? await supplementaryTask
+        let fiat = try await fiatTask
 
-        // 1) Fiat rates from Frankfurter (always relative to a fiat base)
-        //    If base is crypto or supplementary fiat (RUB), use USD as pivot
-        let fiatBase = (base.isCrypto || base.isSupplementaryFiat) ? CurrencyCode.USD : base
-        let fiatResponse = try await fetchRates(base: fiatBase)
+        var rates: [String: Double] = [:]
 
-        // 2) Crypto prices in USD from CoinGecko
-        let cryptoPricesInUSD = try? await fetchCryptoPrices(vsCurrency: "usd")
-
-        // Get the USD rate relative to fiatBase (for cross-calculation)
-        let usdRateFromBase: Double
-        if fiatBase == .USD {
-            usdRateFromBase = 1.0
-        } else {
-            usdRateFromBase = fiatResponse.rates["USD"] ?? 1.0
+        // Frankfurter already returns "1 USD = X target"
+        for (code, rate) in fiat.rates where rate > 0 {
+            rates[code] = rate
         }
 
-        // If base is crypto, we need its USD price
-        var basePriceInUSD: Double = 1.0
-        if base.isCrypto {
-            guard let prices = cryptoPricesInUSD,
-                  let price = prices[base.rawValue], price > 0 else {
-                throw ExchangeRateError.networkError
-            }
-            basePriceInUSD = price
+        // CoinGecko returns "1 crypto = X USD", we store the inverse
+        for (code, priceInUSD) in crypto ?? [:] where priceInUSD > 0 {
+            rates[code] = 1.0 / priceInUSD
         }
 
-        // If base is supplementary fiat (RUB), get its USD rate
-        // open.er-api returns: 1 USD = X RUB, so 1 RUB = 1/X USD
-        var baseSupplementaryUSDRate: Double = 1.0
-        if base.isSupplementaryFiat {
-            let suppRates = try await fetchSupplementaryRates(base: "USD")
-            if let rubPerUSD = suppRates[base.rawValue], rubPerUSD > 0 {
-                baseSupplementaryUSDRate = rubPerUSD
-                // usdRateFromBase for supplementary: 1 RUB = 1/rubPerUSD USD
-                // But we use USD-based Frankfurter, so to convert:
-                // 1 RUB in target = (1/rubPerUSD) * frankfurterRate[target]
+        // open.er-api returns "1 USD = X target" — only used for codes the ECB lacks
+        for code in CurrencyCode.allCases where code.isSupplementaryFiat {
+            if let rate = supplementary?[code.rawValue], rate > 0 {
+                rates[code.rawValue] = rate
             }
         }
 
-        // Insert fiat rates (from Frankfurter, USD-based when base is crypto/supplementary)
-        for (currency, rate) in fiatResponse.rates {
-            let adjustedRate: Double
-            if base.isCrypto {
-                adjustedRate = basePriceInUSD * rate
-            } else if base.isSupplementaryFiat {
-                // fiatResponse is USD-based: rate = how many `currency` per 1 USD
-                // We need: how many `currency` per 1 base (e.g. RUB)
-                // 1 RUB = (1/baseSupplementaryUSDRate) USD
-                // 1 RUB = (1/baseSupplementaryUSDRate) * rate `currency`
-                adjustedRate = rate / baseSupplementaryUSDRate
-            } else {
-                adjustedRate = rate
-            }
-            context.insert(ExchangeRate(
-                baseCurrency: baseName,
-                targetCurrency: currency,
-                rate: adjustedRate,
-                fetchedAt: now
-            ))
-        }
+        rates[CurrencyCode.USD.rawValue] = 1.0
 
-        // Insert crypto rates (crypto as targets)
-        if let prices = cryptoPricesInUSD {
-            for (cryptoCode, priceInUSD) in prices {
-                guard priceInUSD > 0 else { continue }
-                let rate: Double
-                if base.isCrypto {
-                    rate = basePriceInUSD / priceInUSD
-                } else if base.isSupplementaryFiat {
-                    // 1 RUB = (1/baseSupplementaryUSDRate) USD = (1/baseSupplementaryUSDRate)/priceInUSD crypto
-                    rate = 1.0 / (baseSupplementaryUSDRate * priceInUSD)
-                } else {
-                    // 1 base = usdRateFromBase USD = usdRateFromBase/priceInUSD crypto
-                    rate = usdRateFromBase / priceInUSD
-                }
-                context.insert(ExchangeRate(
-                    baseCurrency: baseName,
-                    targetCurrency: cryptoCode,
-                    rate: rate,
-                    fetchedAt: now
-                ))
-            }
-        }
-
-        // 3) Supplementary fiat rates (RUB etc.) from open.er-api.com
-        let supplementaryCodes = CurrencyCode.allCases.filter(\.isSupplementaryFiat)
-        if !supplementaryCodes.isEmpty {
-            if let suppRates = try? await fetchSupplementaryRates(base: "USD") {
-                for code in supplementaryCodes {
-                    guard let rateInUSD = suppRates[code.rawValue], rateInUSD > 0 else { continue }
-                    let rate: Double
-                    if base.isCrypto {
-                        // 1 crypto = basePriceInUSD USD = basePriceInUSD * rateInUSD RUB
-                        rate = basePriceInUSD * rateInUSD
-                    } else if base == .USD {
-                        rate = rateInUSD
-                    } else if code == base {
-                        rate = 1.0
-                    } else {
-                        // 1 base = usdRateFromBase USD = usdRateFromBase * rateInUSD supplementary
-                        rate = usdRateFromBase * rateInUSD
-                    }
-                    context.insert(ExchangeRate(
-                        baseCurrency: baseName,
-                        targetCurrency: code.rawValue,
-                        rate: rate,
-                        fetchedAt: now
-                    ))
-                }
-            }
-
-            // If base IS a supplementary currency, also insert fiat targets
-            if base.isSupplementaryFiat {
-                if let suppRates = try? await fetchSupplementaryRates(base: base.rawValue) {
-                    for fiat in CurrencyCode.fiatCases where !fiat.isSupplementaryFiat && fiat != base {
-                        if let rate = suppRates[fiat.rawValue], rate > 0 {
-                            context.insert(ExchangeRate(
-                                baseCurrency: baseName,
-                                targetCurrency: fiat.rawValue,
-                                rate: rate,
-                                fetchedAt: now
-                            ))
-                        }
-                    }
-                }
-            }
-        }
-
-        // Self-rate (1:1)
-        context.insert(ExchangeRate(
-            baseCurrency: baseName,
-            targetCurrency: baseName,
-            rate: 1.0,
-            fetchedAt: now
-        ))
-
-        try context.save()
+        guard rates.count > 1 else { throw ExchangeRateError.noData }
+        return RateSnapshot(rates: rates, fetchedAt: Date())
     }
 
-    // MARK: - Time Series (Fiat only)
+    // MARK: - Time Series (charts)
 
     /// Fetch time-series rates for a fiat currency pair
-    func fetchTimeSeries(base: CurrencyCode, symbol: CurrencyCode, startDate: Date, endDate: Date) async throws -> FrankfurterTimeSeriesResponse {
+    func fetchTimeSeries(
+        base: CurrencyCode,
+        symbol: CurrencyCode,
+        startDate: Date,
+        endDate: Date
+    ) async throws -> FrankfurterTimeSeriesResponse {
         let start = Self.dateFormatter.string(from: startDate)
         let end = Self.dateFormatter.string(from: endDate)
         let urlString = "\(timeSeriesBaseURL)\(start)..\(end)?base=\(base.rawValue)&symbols=\(symbol.rawValue)"
 
         guard let url = URL(string: urlString) else {
-            throw ExchangeRateError.networkError
+            throw ExchangeRateError.serverUnavailable
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw ExchangeRateError.networkError
-        }
-
+        let data = try await get(url)
         return try JSONDecoder().decode(FrankfurterTimeSeriesResponse.self, from: data)
     }
 
-    /// Fetch CoinGecko 30-day market chart for a crypto
-    func fetchCryptoHistory(coinId: String, days: Int = 30) async throws -> [(date: Date, rate: Double)] {
-        let urlString = "\(coinGeckoBaseURL)/coins/\(coinId)/market_chart?vs_currency=usd&days=\(days)&interval=daily"
+    /// Fetch CoinGecko market chart for a crypto, thinned to one point per day.
+    ///
+    /// `interval=daily` is deliberately omitted: on the keyless tier it answers with
+    /// a stale window (months behind), while the default granularity is current.
+    /// The hourly series it returns is collapsed here instead.
+    func fetchCryptoHistory(coinId: String, days: Int = 30) async throws -> [RatePoint] {
+        let urlString = "\(coinGeckoBaseURL)/coins/\(coinId)/market_chart?vs_currency=usd&days=\(days)"
 
         guard let url = URL(string: urlString) else {
-            throw ExchangeRateError.networkError
+            throw ExchangeRateError.serverUnavailable
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw ExchangeRateError.networkError
-        }
+        let data = try await get(url)
 
         // Response: {"prices":[[timestamp_ms, price], ...], ...}
         let json = try JSONDecoder().decode(CoinGeckoMarketChart.self, from: data)
-        return json.prices.map { pair in
-            (date: Date(timeIntervalSince1970: pair[0] / 1000), rate: pair[1])
+        let points = json.prices.compactMap { pair -> RatePoint? in
+            guard pair.count == 2, pair[1] > 0 else { return nil }
+            return RatePoint(date: Date(timeIntervalSince1970: pair[0] / 1000), rate: pair[1])
         }
+        return Self.collapseToDaily(points)
     }
 
-    /// Fetch 30-day historical data and cache it
-    @MainActor
-    func updateHistoricalCache(base: CurrencyCode, target: CurrencyCode, days: Int = 30, context: ModelContext) async throws {
-        let baseName = base.rawValue
-        let targetName = target.rawValue
+    /// Keep the last observation of each calendar day, in chronological order.
+    static func collapseToDaily(_ points: [RatePoint]) -> [RatePoint] {
+        let calendar = Calendar(identifier: .gregorian)
+        var lastPerDay: [Date: RatePoint] = [:]
+        for point in points {
+            let day = calendar.startOfDay(for: point.date)
+            if let existing = lastPerDay[day], existing.date >= point.date { continue }
+            lastPerDay[day] = point
+        }
+        return lastPerDay.values.sorted { $0.date < $1.date }
+    }
 
-        // Delete old historical rates for this pair
-        try context.delete(model: HistoricalRate.self, where: #Predicate<HistoricalRate> {
-            $0.baseCurrency == baseName && $0.targetCurrency == targetName
-        })
-
+    /// Build a 30-day series for any pair, fiat or crypto, without touching the store.
+    func fetchHistory(base: CurrencyCode, target: CurrencyCode, days: Int = 30) async throws -> [RatePoint] {
         if !base.isCrypto && !target.isCrypto {
-            // Fiat-to-fiat: use Frankfurter time series
+            // Frankfurter has no RUB — pivot through USD when either side is supplementary
+            if base.isSupplementaryFiat || target.isSupplementaryFiat {
+                throw ExchangeRateError.noData
+            }
             let endDate = Date()
             let startDate = Calendar.current.date(byAdding: .day, value: -days, to: endDate)!
             let response = try await fetchTimeSeries(base: base, symbol: target, startDate: startDate, endDate: endDate)
 
-            for (dateString, ratesDict) in response.rates {
-                guard let rateValue = ratesDict[target.rawValue],
-                      let date = Self.dateFormatter.date(from: dateString) else { continue }
-                context.insert(HistoricalRate(
-                    baseCurrency: baseName, targetCurrency: targetName,
-                    rate: rateValue, date: date
-                ))
+            return response.rates.compactMap { dateString, ratesDict in
+                guard let rate = ratesDict[target.rawValue], rate > 0,
+                      let date = Self.dateFormatter.date(from: dateString) else { return nil }
+                return RatePoint(date: date, rate: rate)
             }
-        } else if !base.isCrypto && target.isCrypto {
-            // Fiat-to-crypto: get crypto USD history, convert via fiat
-            guard let geckoId = target.coinGeckoId else { throw ExchangeRateError.noData }
-            let history = try await fetchCryptoHistory(coinId: geckoId, days: days)
-            // Get fiat base -> USD rate (current, for simplicity)
-            let fiatResponse = try await fetchRates(base: base)
-            let usdRate = fiatResponse.rates["USD"] ?? 1.0
-
-            for point in history {
-                guard point.rate > 0 else { continue }
-                // 1 base = usdRate USD = usdRate/cryptoPrice crypto
-                let rate = usdRate / point.rate
-                context.insert(HistoricalRate(
-                    baseCurrency: baseName, targetCurrency: targetName,
-                    rate: rate, date: point.date
-                ))
-            }
-        } else if base.isCrypto && !target.isCrypto {
-            // Crypto-to-fiat: get crypto USD history, convert to target fiat
-            guard let geckoId = base.coinGeckoId else { throw ExchangeRateError.noData }
-            let history = try await fetchCryptoHistory(coinId: geckoId, days: days)
-            // Get USD -> target fiat rate
-            let fiatResponse = try await fetchRates(base: .USD)
-            let targetFiatRate = fiatResponse.rates[target.rawValue] ?? 1.0
-
-            for point in history {
-                // 1 crypto = cryptoPrice USD = cryptoPrice * targetFiatRate target
-                let rate = point.rate * targetFiatRate
-                context.insert(HistoricalRate(
-                    baseCurrency: baseName, targetCurrency: targetName,
-                    rate: rate, date: point.date
-                ))
-            }
-        } else {
-            // Crypto-to-crypto: get both histories in USD
-            guard let baseId = base.coinGeckoId, let targetId = target.coinGeckoId else {
-                throw ExchangeRateError.noData
-            }
-            let baseHistory = try await fetchCryptoHistory(coinId: baseId, days: days)
-            let targetHistory = try await fetchCryptoHistory(coinId: targetId, days: days)
-
-            // Match by closest date
-            for basePoint in baseHistory {
-                guard basePoint.rate > 0 else { continue }
-                if let targetPoint = targetHistory.min(by: {
-                    abs($0.date.timeIntervalSince(basePoint.date)) < abs($1.date.timeIntervalSince(basePoint.date))
-                }), targetPoint.rate > 0 {
-                    let rate = basePoint.rate / targetPoint.rate
-                    context.insert(HistoricalRate(
-                        baseCurrency: baseName, targetCurrency: targetName,
-                        rate: rate, date: basePoint.date
-                    ))
-                }
-            }
+            .sorted { $0.date < $1.date }
         }
 
-        try context.save()
+        if !base.isCrypto && target.isCrypto {
+            // Fiat → crypto: crypto history is in USD, scale by today's USD→fiat rate
+            guard let geckoId = target.coinGeckoId else { throw ExchangeRateError.noData }
+            let history = try await fetchCryptoHistory(coinId: geckoId, days: days)
+            let usdPerBase = try await usdRate(for: base)
+
+            return history.map { RatePoint(date: $0.date, rate: usdPerBase / $0.rate) }
+        }
+
+        if base.isCrypto && !target.isCrypto {
+            guard let geckoId = base.coinGeckoId else { throw ExchangeRateError.noData }
+            let history = try await fetchCryptoHistory(coinId: geckoId, days: days)
+            let usdPerTarget = try await usdRate(for: target)
+
+            return history.map { RatePoint(date: $0.date, rate: $0.rate * usdPerTarget) }
+        }
+
+        // Crypto → crypto: align both USD series by calendar day
+        guard let baseId = base.coinGeckoId, let targetId = target.coinGeckoId else {
+            throw ExchangeRateError.noData
+        }
+        async let baseTask = fetchCryptoHistory(coinId: baseId, days: days)
+        async let targetTask = fetchCryptoHistory(coinId: targetId, days: days)
+        let baseHistory = try await baseTask
+        let targetHistory = try await targetTask
+
+        // Index by day so the join is O(n), not O(n²)
+        let calendar = Calendar(identifier: .gregorian)
+        var targetByDay: [Date: Double] = [:]
+        for point in targetHistory {
+            targetByDay[calendar.startOfDay(for: point.date)] = point.rate
+        }
+
+        return baseHistory.compactMap { point in
+            guard let targetRate = targetByDay[calendar.startOfDay(for: point.date)], targetRate > 0 else {
+                return nil
+            }
+            return RatePoint(date: point.date, rate: point.rate / targetRate)
+        }
     }
+
+    /// "1 `currency` = X USD", for the currencies charts can reach.
+    private func usdRate(for currency: CurrencyCode) async throws -> Double {
+        if currency == .USD { return 1.0 }
+        if currency.isSupplementaryFiat {
+            let rates = try await fetchSupplementaryRates(base: "USD")
+            guard let perUSD = rates[currency.rawValue], perUSD > 0 else { throw ExchangeRateError.noData }
+            return 1.0 / perUSD
+        }
+        let response = try await fetchRates(base: .USD)
+        guard let perUSD = response.rates[currency.rawValue], perUSD > 0 else { throw ExchangeRateError.noData }
+        return 1.0 / perUSD
+    }
+}
+
+/// One point of a rate series.
+struct RatePoint: Sendable, Equatable {
+    let date: Date
+    let rate: Double
 }
 
 /// CoinGecko market chart response
@@ -374,14 +305,33 @@ struct OpenERResponse: Codable {
     let rates: [String: Double]
 }
 
-enum ExchangeRateError: LocalizedError {
-    case networkError
+enum ExchangeRateError: LocalizedError, Equatable {
+    /// The device could not reach the network at all.
+    case offline
+    /// The network is up but the rate provider did not answer usefully.
+    case serverUnavailable
+    /// The provider is throttling us (CoinGecko's keyless tier is stingy).
+    case rateLimited
     case noData
+
+    static func from(_ error: Error) -> ExchangeRateError {
+        guard let urlError = error as? URLError else { return .serverUnavailable }
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
+             .cannotFindHost, .cannotConnectToHost, .timedOut,
+             .internationalRoamingOff, .callIsActive, .secureConnectionFailed:
+            return .offline
+        default:
+            return .serverUnavailable
+        }
+    }
 
     var errorDescription: String? {
         switch self {
-        case .networkError: "Unable to fetch exchange rates. Check your connection."
-        case .noData: "No cached rates available."
+        case .offline: String(localized: "No connection — showing saved rates.")
+        case .serverUnavailable: String(localized: "Rate service unavailable — showing saved rates.")
+        case .rateLimited: String(localized: "Too many requests — try again in a moment.")
+        case .noData: String(localized: "No saved rates yet. Connect once to get started.")
         }
     }
 }

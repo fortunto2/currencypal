@@ -1,6 +1,6 @@
 name: CurrencyPal
 options:
-  bundleIdPrefix: com.currencypal
+  bundleIdPrefix: co.superduperai
   deploymentTarget:
     iOS: "17.0"
   xcodeVersion: "16.0"
@@ -9,6 +9,8 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     GENERATE_INFOPLIST_FILE: YES
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "2"
 
 targets:
   CurrencyPal:
@@ -20,7 +22,14 @@ targets:
       base:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.currencypal.app
+        INFOPLIST_KEY_CFBundleDisplayName: CurrencyPals
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        # Only HTTPS calls to public rate APIs — no custom or proprietary crypto
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        PRODUCT_BUNDLE_IDENTIFIER: co.superduperai.currencypal
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
         SWIFT_STRICT_CONCURRENCY: complete
         DEVELOPMENT_TEAM: 8N495BBBLM
         CODE_SIGN_STYLE: Automatic
@@ -34,4 +43,18 @@ targets:
       - target: CurrencyPal
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.currencypal.tests
+        PRODUCT_BUNDLE_IDENTIFIER: co.superduperai.currencypal.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+  CurrencyPalUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - CurrencyPalUITests
+    dependencies:
+      - target: CurrencyPal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.superduperai.currencypal.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: CurrencyPal
