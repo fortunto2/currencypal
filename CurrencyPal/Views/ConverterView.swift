@@ -55,6 +55,9 @@ struct ConverterView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     EditButton()
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    CrossPromoMenu()
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
                         focusedCurrency = nil
