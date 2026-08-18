@@ -20,6 +20,7 @@
 		9908B9BB0FF18D2D1D4D2F4E /* FrankfurterResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B9F154F337982278C3C15BD /* FrankfurterResponse.swift */; };
 		B1A35D4240767F796F482C73 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D2E44439BF4A100BB04AC9 /* ContentView.swift */; };
 		BA6A91D702AE21D697A7EC5C /* ExchangeRateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56192415FD103617C1876DC1 /* ExchangeRateService.swift */; };
+		C5E421ADE3E2F46517884EE0 /* SuperDuperAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = BFDE13A3ADF8CEE8F7674B00 /* SuperDuperAnalytics */; };
 		D8B85BD570060AAF4BF924AF /* ConverterUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C8EFE7E4E71BE396D7B7AF /* ConverterUITests.swift */; };
 		E4C1581F9B1A72228E0F44CE /* ScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94DD4EE69EA439378A34BF37 /* ScreenshotTests.swift */; };
 		EFF54F881F25EC3A828F2FFA /* ConvertedCurrencyRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F58A65FEACA1A5CC64DD0E13 /* ConvertedCurrencyRow.swift */; };
@@ -55,6 +56,7 @@
 		604A4EB5A72D0F256464ED99 /* ConverterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterTests.swift; sourceTree = "<group>"; };
 		7044BB4612167B537932B8F6 /* ConverterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterView.swift; sourceTree = "<group>"; };
 		7C745487A26AAB317B2115D1 /* AddCurrencySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCurrencySheet.swift; sourceTree = "<group>"; };
+		7D463631EFC7040F61E39E85 /* superduperai-analytics */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "superduperai-analytics"; path = "../../shared/superduperai-analytics"; sourceTree = SOURCE_ROOT; };
 		94DD4EE69EA439378A34BF37 /* ScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotTests.swift; sourceTree = "<group>"; };
 		B59C2286BD3B6CC7632AECF9 /* CurrencyPal.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CurrencyPal.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C40FB5077A7480A3F70CE6C2 /* ConverterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterViewModel.swift; sourceTree = "<group>"; };
@@ -63,6 +65,17 @@
 		F58A65FEACA1A5CC64DD0E13 /* ConvertedCurrencyRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertedCurrencyRow.swift; sourceTree = "<group>"; };
 		F94D6C34C7E68E1A903980D6 /* ChartViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		EA5E4E8A8B8072CDC367ED64 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C5E421ADE3E2F46517884EE0 /* SuperDuperAnalytics in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		059D1E5C76236C35B290FD40 /* CurrencyPal */ = {
@@ -98,6 +111,14 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		393002192D535FB0B2CA8F53 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				7D463631EFC7040F61E39E85 /* superduperai-analytics */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
 		4CCD91D1197EFA4CDDF08A9E /* Services */ = {
 			isa = PBXGroup;
 			children = (
@@ -112,6 +133,7 @@
 				059D1E5C76236C35B290FD40 /* CurrencyPal */,
 				F9F3BE3CC34235728805B03B /* CurrencyPalTests */,
 				ED4EC8922AC444A2A43C7598 /* CurrencyPalUITests */,
+				393002192D535FB0B2CA8F53 /* Packages */,
 				266045BE07B6C56FE25A61CA /* Products */,
 			);
 			sourceTree = "<group>";
@@ -181,6 +203,7 @@
 			buildPhases = (
 				054E916DEEA72456D8BDDC74 /* Sources */,
 				4707A3DE6D0E8BA245976432 /* Resources */,
+				EA5E4E8A8B8072CDC367ED64 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -188,6 +211,7 @@
 			);
 			name = CurrencyPal;
 			packageProductDependencies = (
+				BFDE13A3ADF8CEE8F7674B00 /* SuperDuperAnalytics */,
 			);
 			productName = CurrencyPal;
 			productReference = B59C2286BD3B6CC7632AECF9 /* CurrencyPal.app */;
@@ -239,6 +263,9 @@
 			);
 			mainGroup = 629C77FEA7BF3521296D6C68;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C26612A826522ACAA0CC592C /* XCLocalSwiftPackageReference "../../shared/superduperai-analytics" */,
+			);
 			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
 			projectRoot = "";
@@ -595,6 +622,20 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C26612A826522ACAA0CC592C /* XCLocalSwiftPackageReference "../../shared/superduperai-analytics" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../../shared/superduperai-analytics";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BFDE13A3ADF8CEE8F7674B00 /* SuperDuperAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SuperDuperAnalytics;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2C9704071DD10B519B7565CB /* Project object */;
 }

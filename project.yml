@@ -12,12 +12,20 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "2"
 
+packages:
+  SuperDuperAnalytics:
+    # Локальный путь, а не git: пакет живёт в этом же дереве, и версия, которая собирается,
+    # обязана быть той, которую сейчас правят. Появится публичный репозиторий — станет url.
+    path: ../../shared/superduperai-analytics
+
 targets:
   CurrencyPal:
     type: application
     platform: iOS
     sources:
       - CurrencyPal
+    dependencies:
+      - package: SuperDuperAnalytics
     settings:
       base:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
