@@ -16,6 +16,7 @@
 		492F4676F0D1B87238B6D8FA /* ChartDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04A4D0A7B0DDB607EA18EB8E /* ChartDetailView.swift */; };
 		4F3D5B417A0B5EA62EC85121 /* ChartViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F94D6C34C7E68E1A903980D6 /* ChartViewModel.swift */; };
 		5EFF9C2C711B9A61A32EE65F /* ConverterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7044BB4612167B537932B8F6 /* ConverterView.swift */; };
+		AA10CROSSPROMO0000000001 /* CrossPromoMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10CROSSPROMO0000000002 /* CrossPromoMenu.swift */; };
 		752DABB4DF4CA8A38A6996A5 /* AddCurrencySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C745487A26AAB317B2115D1 /* AddCurrencySheet.swift */; };
 		9908B9BB0FF18D2D1D4D2F4E /* FrankfurterResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B9F154F337982278C3C15BD /* FrankfurterResponse.swift */; };
 		B1A35D4240767F796F482C73 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D2E44439BF4A100BB04AC9 /* ContentView.swift */; };
@@ -55,8 +56,8 @@
 		56192415FD103617C1876DC1 /* ExchangeRateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeRateService.swift; sourceTree = "<group>"; };
 		604A4EB5A72D0F256464ED99 /* ConverterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterTests.swift; sourceTree = "<group>"; };
 		7044BB4612167B537932B8F6 /* ConverterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterView.swift; sourceTree = "<group>"; };
+		AA10CROSSPROMO0000000002 /* CrossPromoMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossPromoMenu.swift; sourceTree = "<group>"; };
 		7C745487A26AAB317B2115D1 /* AddCurrencySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCurrencySheet.swift; sourceTree = "<group>"; };
-		7D463631EFC7040F61E39E85 /* superduperai-analytics */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "superduperai-analytics"; path = "../../shared/superduperai-analytics"; sourceTree = SOURCE_ROOT; };
 		94DD4EE69EA439378A34BF37 /* ScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotTests.swift; sourceTree = "<group>"; };
 		B59C2286BD3B6CC7632AECF9 /* CurrencyPal.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CurrencyPal.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C40FB5077A7480A3F70CE6C2 /* ConverterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterViewModel.swift; sourceTree = "<group>"; };
@@ -114,7 +115,6 @@
 		393002192D535FB0B2CA8F53 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				7D463631EFC7040F61E39E85 /* superduperai-analytics */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -154,6 +154,7 @@
 				04A4D0A7B0DDB607EA18EB8E /* ChartDetailView.swift */,
 				F58A65FEACA1A5CC64DD0E13 /* ConvertedCurrencyRow.swift */,
 				7044BB4612167B537932B8F6 /* ConverterView.swift */,
+				AA10CROSSPROMO0000000002 /* CrossPromoMenu.swift */,
 				2E11F29519A449C8477D3C68 /* FreshnessBadge.swift */,
 			);
 			path = Views;
@@ -264,7 +265,7 @@
 			mainGroup = 629C77FEA7BF3521296D6C68;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				C26612A826522ACAA0CC592C /* XCLocalSwiftPackageReference "../../shared/superduperai-analytics" */,
+				C26612A826522ACAA0CC592C /* XCRemoteSwiftPackageReference "superduperai-analytics-swift" */,
 			);
 			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
@@ -299,6 +300,7 @@
 				B1A35D4240767F796F482C73 /* ContentView.swift in Sources */,
 				EFF54F881F25EC3A828F2FFA /* ConvertedCurrencyRow.swift in Sources */,
 				5EFF9C2C711B9A61A32EE65F /* ConverterView.swift in Sources */,
+				AA10CROSSPROMO0000000001 /* CrossPromoMenu.swift in Sources */,
 				24A613F0AEA3D869F3136AE2 /* ConverterViewModel.swift in Sources */,
 				0269920E891CD99C9BACEAB7 /* Currency.swift in Sources */,
 				16E737F975D1EEAA8A6892AC /* CurrencyPalApp.swift in Sources */,
@@ -623,16 +625,21 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		C26612A826522ACAA0CC592C /* XCLocalSwiftPackageReference "../../shared/superduperai-analytics" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "../../shared/superduperai-analytics";
+/* Begin XCRemoteSwiftPackageReference section */
+		C26612A826522ACAA0CC592C /* XCRemoteSwiftPackageReference "superduperai-analytics-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/fortunto2/superduperai-analytics-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
 		};
-/* End XCLocalSwiftPackageReference section */
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		BFDE13A3ADF8CEE8F7674B00 /* SuperDuperAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = C26612A826522ACAA0CC592C /* XCRemoteSwiftPackageReference "superduperai-analytics-swift" */;
 			productName = SuperDuperAnalytics;
 		};
 /* End XCSwiftPackageProductDependency section */
